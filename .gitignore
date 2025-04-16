@@ -1,5 +1,6 @@
 ai_chat/
 __pycache__/
+hf_model_cache/
 *.pyc
 .env  
 .DS_Store
