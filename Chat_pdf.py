@@ -55,7 +55,10 @@ def get_vectorstore(uploaded_file=None):
         pdf_loader = PyPDFLoader("./cnn_doc.pdf")  # fallback
     vectordb = VectorstoreIndexCreator(
         text_splitter=RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100),
-        embedding=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"),
+        embedding = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2",
+    cache_folder="./hf_model_cache"
+),
     ).from_loaders([pdf_loader])
     return vectordb.vectorstore
 

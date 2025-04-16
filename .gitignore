@@ -1,8 +1,10 @@
 ai_chat/
 __pycache__/
 *.pyc
-.env  # This will prevent the .env file from being pushed to GitHub
+.env  
 .DS_Store
 axe.py
 imp_docs.txt
 .streamlit/
+formatted_report.txt
+report.py
