@@ -1,0 +1,5 @@
+{
+    "name": "Install Dependencies",
+    "description": "Installs Python packages listed in requirements.txt",
+    "command": "pip install -r requirements.txt"
+  }
