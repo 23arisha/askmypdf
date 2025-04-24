@@ -11,7 +11,6 @@ from langchain.chains import RetrievalQA
 import tempfile
 from duckduckgo_search import DDGS
 
-
 # Disable warnings and info logs
 warnings.filterwarnings("ignore")
 logging.getLogger("transformers").setLevel(logging.ERROR)
@@ -20,8 +19,9 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 st.title('📚 AskMyPDF')
 st.markdown(
     "Upload a PDF document and ask questions about its content. "
-    "If the answer is not found, you can enable web search to get relevant information from the internet."
+    "If the answer is not found or the question is out of context, it can search the web (if enabled)."
 )
+
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -55,10 +55,10 @@ def get_vectorstore(uploaded_file=None):
         pdf_loader = PyPDFLoader("./cnn_doc.pdf")  # fallback
     vectordb = VectorstoreIndexCreator(
         text_splitter=RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100),
-        embedding = HuggingFaceEmbeddings(
-    model_name="all-MiniLM-L6-v2",
-    cache_folder="./hf_model_cache"
-),
+        embedding=HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            cache_folder="./hf_model_cache"
+        ),
     ).from_loaders([pdf_loader])
     return vectordb.vectorstore
 
@@ -91,49 +91,56 @@ if st.session_state.pdf_uploaded:
         )
 
         try:
-            chain = RetrievalQA.from_chain_type(
-                llm=chat_model,
-                retriever=st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3}),
-                return_source_documents=True,
-                chain_type="stuff"
-            )
+            # === Relevance Classifier ===
+            top_doc = st.session_state.vectorstore.similarity_search(prompt, k=1)[0]
+            relevance_prompt = f"""
+You are an assistant helping to determine if a user's question can be answered using a document.
 
-            result = chain({"query": prompt})
-            response = result['result']
+Document excerpt:
+\"\"\"{top_doc.page_content[:1000]}\"\"\"
 
-            # Check for vague or missing response
-            if not response.strip() or any(x in response.lower() for x in ["i don't know", "not sure", "can't find", "no information", "not mentioned"]):
-                st.chat_message("assistant").markdown("I couldn't find an answer in the PDF. 🔎 Searching the web...")
-                
+User question:
+"{prompt}"
+
+Based on the document, can this question be answered directly from it? Answer only "Yes" or "No".
+"""
+            relevance_answer = chat_model.invoke(relevance_prompt).content.strip().lower()
+
+            if "no" in relevance_answer:
+                st.chat_message("assistant").markdown("❌ This question appears unrelated to the PDF content.")
+
                 if st.session_state.web_search_enabled:
+                    st.chat_message("assistant").markdown("🔎 Searching the web for a relevant answer...")
                     web_info = web_search(prompt)
 
                     full_prompt = f"""
-                    The user asked: '{prompt}'.
+The user asked: '{prompt}'.
 
-                    Here are the top relevant search results:
-                    {web_info}
+Here are the top relevant search results:
+{web_info}
 
-                    Based on these results, provide a clear and accurate answer.
-                    If no relevant answer is found, say so.
-                    """
-
-                    # Run the model and extract clean content
+Based on these results, provide a clear and accurate answer.
+If no relevant answer is found, say so.
+"""
                     llm_response = chat_model.invoke(full_prompt)
-
-                    # Get only the clean content if available
-                    if hasattr(llm_response, "content"):
-                        response = llm_response.content.strip()
-                    else:
-                        response = str(llm_response).strip()
-
-                    # Remove unwanted line breaks and backslashes
+                    response = llm_response.content.strip() if hasattr(llm_response, "content") else str(llm_response).strip()
                     response = response.replace("\\n", " ").replace("\n", " ").replace("  ", " ")
-    
                 else:
-                    response = "Web search is disabled. Please refine your question."
+                    response = "🌐 Web search is disabled. Please refine your question or enable search above."
 
-            # Display final response
+            else:
+                # === Run normal RetrievalQA ===
+                chain = RetrievalQA.from_chain_type(
+                    llm=chat_model,
+                    retriever=st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3}),
+                    return_source_documents=True,
+                    chain_type="stuff"
+                )
+
+                result = chain({"query": prompt})
+                response = result['result'].strip()
+
+            # Display response
             st.chat_message("assistant").markdown(response)
             st.session_state.messages.append({'role': 'assistant', 'content': response})
 

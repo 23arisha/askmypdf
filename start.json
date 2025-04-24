@@ -1,6 +1,0 @@
-{
-    "name": "Start Streamlit App",
-    "description": "Runs the Streamlit application",
-    "command": "streamlit run Chat_pdf.py"
-  }
-  

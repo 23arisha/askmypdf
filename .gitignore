@@ -1,7 +1,5 @@
 ai_chat/
-__pycache__/
 hf_model_cache/
-*.pyc
 .env  
 .DS_Store
 axe.py
@@ -9,3 +7,4 @@ imp_docs.txt
 .streamlit/
 formatted_report.txt
 report.py
+neo.py
